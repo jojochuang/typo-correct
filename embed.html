@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="typo-embed-root">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>字音字形改錯</title>
+  <link rel="preload" href="assets/fonts/BpmfZihiOnly-R.ttf" as="font" type="font/ttf" crossorigin />
+  <link rel="preload" href="assets/fonts/ToneOZ-Tsuipita-TC.ttf" as="font" type="font/ttf" crossorigin />
+  <link rel="stylesheet" href="assets/css/fonts.css" />
+  <link rel="stylesheet" href="assets/css/jungle-game.css" />
+  <link rel="stylesheet" href="assets/css/embed.css" />
+</head>
+<body class="typo-embed">
+  <div id="gameApp" class="jungle-game">
+    <div id="gameViewport" class="game-viewport">
+      <div class="game-viewport__bg" aria-hidden="true"></div>
+
+      <div id="startOverlay" class="start-overlay">
+        <button type="button" id="startBtn" class="start-btn" aria-label="開始">
+          <span class="start-btn__play" aria-hidden="true"></span>
+          <span class="start-btn__text">開始</span>
+        </button>
+        <div class="start-overlay__meta">
+          <p class="start-hint" id="startHint">依注音選出正確的字。點擊下方木牌上的答案繼續。</p>
+          <button type="button" id="continueBtn" class="start-continue hidden">繼續上次進度</button>
+        </div>
+      </div>
+
+      <header class="game-hud">
+        <div class="hud-left">
+          <button type="button" id="hudClose" class="hud-close" title="結束">×</button>
+          <div class="hud-pill" id="timerHud">0:00</div>
+        </div>
+        <div class="hud-pill" id="scoreHud">✓ 0</div>
+      </header>
+
+      <main id="gameCenter" class="game-center hidden"></main>
+
+      <footer class="game-footer">
+        <div class="game-footer__left">
+          <div class="menu-wrap">
+            <button type="button" id="menuBtn" class="footer-icon-btn" title="選單">☰</button>
+            <div id="sideMenu" class="side-menu hidden">
+              <button type="button" id="menuToggleMode">切換進階版</button>
+              <button type="button" id="menuRestart">重新玩</button>
+              <button type="button" id="menuSave">存檔（下次可繼續）</button>
+            </div>
+          </div>
+        </div>
+        <div class="game-footer__right">
+          <button type="button" id="speakBtn" class="footer-icon-btn" title="播放語詞">🔊</button>
+          <button type="button" id="fsBtn" class="footer-icon-btn" title="全螢幕">⛶</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/sheet-fetcher.js"></script>
+  <script type="module" src="assets/js/typo-game-page.js"></script>
+</body>
+</html>
