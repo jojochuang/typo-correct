@@ -1,0 +1,11 @@
+@font-face {
+  font-family: "ToneOZTsuipita";
+  src: url("../fonts/ToneOZ-Tsuipita-TC.ttf") format("truetype");
+  font-display: block;
+}
+
+@font-face {
+  font-family: "BpmfZihiOnly-R";
+  src: url("../fonts/BpmfZihiOnly-R.ttf") format("truetype");
+  font-display: block;
+}
