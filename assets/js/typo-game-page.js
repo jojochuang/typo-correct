@@ -289,7 +289,10 @@ function initQuestionStates() {
     q.solved = false;
     q.wrongAttempts = 0;
     q.mastered = false;
-    if (q.mode === "advanced") q.pickerOpen = false;
+    if (q.mode === "advanced") {
+      q.pickerOpen = false;
+      resetAdvancedQuestionDisplay(q);
+    }
   }
 }
 
@@ -308,15 +311,27 @@ function currentQuestion() {
   return questions[playQueue[queuePos]];
 }
 
+function resetAdvancedQuestionDisplay(q) {
+  q.shownHanzi = q.chars.map((seg, i) => (i === q.wrongIdx ? q.wrongChar : seg));
+}
+
 function resetQuestionForRetry(q) {
   q.solved = false;
   q.wrongAttempts = 0;
-  if (q.mode === "advanced") q.pickerOpen = false;
+  if (q.mode === "advanced") {
+    q.pickerOpen = false;
+    resetAdvancedQuestionDisplay(q);
+  }
 }
 
 function scheduleRetry(qIndex) {
-  if (retryEntries.some((e) => e.qIndex === qIndex)) return;
-  retryEntries.push({ qIndex, dueAt: questionsShown + RETRY_GAP + 1 });
+  const dueAt = questionsShown + RETRY_GAP + 1;
+  const existing = retryEntries.find((e) => e.qIndex === qIndex);
+  if (existing) {
+    existing.dueAt = dueAt;
+    return;
+  }
+  retryEntries.push({ qIndex, dueAt });
 }
 
 function injectDueRetries() {
@@ -567,6 +582,7 @@ function bindBoardPickHandlers(center, q) {
   center.querySelectorAll(".board-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       if (q.solved) return;
+      if (q.mode === "advanced" && !q.pickerOpen) return;
       center.querySelectorAll(".board-btn").forEach((b) => b.classList.remove("board-btn--picked"));
       btn.classList.add("board-btn--picked");
       const picked = btn.getAttribute("data-pick") || "";
@@ -595,7 +611,10 @@ function bindAdvancedCharHandlers(center, q) {
       if (q.solved) return;
       const idx = parseInt(btn.getAttribute("data-char-idx"), 10);
       if (idx !== q.wrongIdx) {
+        q.wrongAttempts = (q.wrongAttempts || 0) + 1;
         playAudio(false);
+        btn.classList.add("wrong-flash");
+        setTimeout(() => btn.classList.remove("wrong-flash"), 400);
         return;
       }
       playAudio(true);
@@ -648,7 +667,10 @@ function goPrev() {
   if (q) {
     q.solved = false;
     q.wrongAttempts = 0;
-    if (q.mode === "advanced") q.pickerOpen = false;
+    if (q.mode === "advanced") {
+      q.pickerOpen = false;
+      resetAdvancedQuestionDisplay(q);
+    }
   }
   renderGame();
 }
@@ -660,7 +682,10 @@ function goNext() {
   if (q) {
     q.solved = false;
     q.wrongAttempts = 0;
-    if (q.mode === "advanced") q.pickerOpen = false;
+    if (q.mode === "advanced") {
+      q.pickerOpen = false;
+      resetAdvancedQuestionDisplay(q);
+    }
   }
   renderGame();
 }
