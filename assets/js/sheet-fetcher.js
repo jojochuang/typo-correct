@@ -38,8 +38,21 @@
     return ((row[idx] || "") + "").trim();
   }
 
-  /** @returns {{ similarChars: string[], words: string[] }[]} */
-  function parseTypoRows(rows) {
+  function isUnitSheetFormat(rows) {
+    if (!rows.length) return false;
+    if (/第幾單元/.test(cell(rows[0], 0))) return true;
+    for (let i = 1; i < Math.min(rows.length, 8); i++) {
+      const unit = cell(rows[i], 0);
+      const similar = cell(rows[i], 1);
+      if (unit && similar && /^-?\d+(\.\d+)?$/.test(unit) && similar.split(/\s+/).filter(Boolean).length >= 2) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** @returns {{ unit?: string, similarChars: string[], words: string[] }[]} */
+  function parseLegacyTypoRows(rows) {
     const out = [];
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -59,6 +72,56 @@
       }
     }
     return out;
+  }
+
+  /** A=第幾單元, B=相似字形, C+=語詞 */
+  function parseUnitTypoRows(rows) {
+    const out = [];
+    let start = 0;
+    if (rows.length && /第幾單元/.test(cell(rows[0], 0))) start = 1;
+
+    for (let i = start; i < rows.length; i++) {
+      const row = rows[i];
+      const unit = cell(row, 0);
+      const similarRaw = cell(row, 1);
+      if (!unit || !similarRaw) continue;
+
+      const similarChars = similarRaw.split(/\s+/).filter(Boolean);
+      const words = [];
+      for (let j = 2; j < row.length; j++) {
+        const w = cell(row, j);
+        if (!w || /^語詞$/i.test(w) || /^相似字形$/i.test(w)) continue;
+        words.push(w);
+      }
+      if (similarChars.length >= 2 && words.length) {
+        out.push({ unit, similarChars, words });
+      }
+    }
+    return out;
+  }
+
+  function parseTypoRows(rows) {
+    return isUnitSheetFormat(rows) ? parseUnitTypoRows(rows) : parseLegacyTypoRows(rows);
+  }
+
+  function listUnits(rows) {
+    const units = [];
+    const seen = new Set();
+    for (const row of rows) {
+      if (row.unit == null || row.unit === "") continue;
+      const u = String(row.unit);
+      if (!seen.has(u)) {
+        seen.add(u);
+        units.push(u);
+      }
+    }
+    units.sort((a, b) => {
+      const na = Number(a);
+      const nb = Number(b);
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      return String(a).localeCompare(String(b), "zh-Hant");
+    });
+    return units;
   }
 
   async function fetchTypoRows(sheetId, gid) {
@@ -82,6 +145,8 @@
   window.TypoCorrectSheet = {
     fetchTypoRows,
     parseCsv,
-    parseTypoRows
+    parseTypoRows,
+    listUnits,
+    isUnitSheetFormat
   };
 })();

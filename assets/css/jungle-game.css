@@ -161,6 +161,136 @@
   display: none;
 }
 
+/* 關卡完成 */
+.level-complete {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5%;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+
+.level-complete.hidden {
+  display: none;
+}
+
+.level-complete__panel {
+  width: min(92%, 22em);
+  text-align: center;
+}
+
+.level-complete__banner {
+  margin: 0 0 1.1em;
+  padding: 0.65em 0.5em;
+  font-size: clamp(1.75rem, 7cqw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.2;
+  color: #fff8e1;
+  text-shadow:
+    0 0 0.35em rgba(255, 193, 7, 0.9),
+    0 2px 8px rgba(0, 0, 0, 0.55);
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.92) 0%, rgba(245, 124, 0, 0.95) 45%, rgba(230, 81, 0, 0.92) 100%);
+  border-radius: 0.35em;
+  box-shadow: 0 0.25em 1em rgba(0, 0, 0, 0.35);
+  animation: level-complete-pop 0.55s ease-out;
+}
+
+@keyframes level-complete-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) translateY(0.5em);
+  }
+  70% {
+    transform: scale(1.04) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.level-complete__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65em;
+}
+
+.level-complete__btn {
+  width: 100%;
+  padding: 0.75em 1em;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: clamp(0.95rem, 3.6cqw, 1.15rem);
+  font-weight: 600;
+  cursor: pointer;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.level-complete__btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.level-complete__btn--primary {
+  background: linear-gradient(180deg, #66bb6a 0%, #2e7d32 100%);
+  border-color: rgba(255, 255, 255, 0.95);
+}
+
+.level-complete__btn--primary:hover {
+  background: linear-gradient(180deg, #81c784 0%, #388e3c 100%);
+}
+
+.level-complete__btn.hidden {
+  display: none;
+}
+
+/* 答對／答錯回饋（音效關閉時顯示大拇指） */
+.feedback-fx {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  z-index: 45;
+  transform: translate(-50%, -50%) scale(1);
+  font-size: clamp(4rem, 20cqw, 7.5rem);
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 0.08em 0.2em rgba(0, 0, 0, 0.35);
+  animation: feedback-thumb-pop 0.5s ease-out;
+}
+
+.feedback-fx.hidden {
+  display: none;
+}
+
+.feedback-fx--ok {
+  color: #2e7d32;
+  filter: hue-rotate(95deg) saturate(2.4) drop-shadow(0 0 0.2em rgba(46, 125, 50, 0.9));
+}
+
+.feedback-fx--wrong {
+  color: #c62828;
+  filter: hue-rotate(-25deg) saturate(2.6) drop-shadow(0 0 0.2em rgba(198, 40, 40, 0.9));
+}
+
+@keyframes feedback-thumb-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  55% {
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 /* HUD */
 .game-hud {
   position: absolute;
@@ -644,6 +774,39 @@
 
 .side-menu button:hover {
   background: #eef3ff;
+}
+
+.unit-picker {
+  max-height: 42vh;
+  overflow-y: auto;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 4px 0;
+}
+
+.unit-picker.hidden {
+  display: none;
+}
+
+.unit-picker button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 16px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.unit-picker button:hover {
+  background: #eef3ff;
+}
+
+.unit-picker__btn--active {
+  background: #dbeafe !important;
+  font-weight: 600;
 }
 
 .game-loading,

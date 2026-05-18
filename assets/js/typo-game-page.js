@@ -1,9 +1,13 @@
 const SWIPE_THRESHOLD = 50;
 const SAVE_KEY = "typoJungleGame_v1";
 const MODE_STORAGE = "typoJungleGame_mode";
+const UNIT_STORAGE = "typoJungleGame_unit";
+const SFX_STORAGE = "typoJungleGame_sfx";
 const RETRY_GAP = 20;
 
 let gameMode = "basic";
+let selectedUnit = "";
+let availableUnits = [];
 let sheetRows = [];
 
 let questions = [];
@@ -27,12 +31,15 @@ function onWordBoardResize() {
 
 let speakingEnabled = true;
 let gameStarted = false;
+let levelCompleteActive = false;
+let sfxEnabled = true;
+let feedbackFxTimer = null;
 let audioCorrect = null;
 let audioWrong = null;
 
 const audioPathCandidates = {
-  correct: ["assets/sounds/correct.mp3"],
-  wrong: ["assets/sounds/wrong.mp3"]
+  correct: ["assets/sounds/correct.mp3", "../ptt/sounds/correct.mp3"],
+  wrong: ["assets/sounds/wrong.mp3", "../ptt/sounds/wrong.mp3"]
 };
 
 function byId(id) {
@@ -107,9 +114,195 @@ function pickOptions(group, correctBase) {
   return shuffle(opts);
 }
 
-function modeStorageKey() {
+function configScopeKey() {
   const cfg = window.TypoCorrectConfig || {};
-  return MODE_STORAGE + "_" + (cfg.sheetId || "") + "_" + (cfg.gid || "");
+  return (cfg.sheetId || "") + "_" + (cfg.gid || "");
+}
+
+function modeStorageKey() {
+  return MODE_STORAGE + "_" + configScopeKey();
+}
+
+function unitStorageKey() {
+  return UNIT_STORAGE + "_" + configScopeKey();
+}
+
+function sfxStorageKey() {
+  return SFX_STORAGE + "_" + configScopeKey();
+}
+
+function loadSfxSetting() {
+  try {
+    const v = localStorage.getItem(sfxStorageKey());
+    if (v === "0" || v === "off") sfxEnabled = false;
+    else if (v === "1" || v === "on") sfxEnabled = true;
+  } catch (_) {}
+}
+
+function saveSfxSetting() {
+  try {
+    localStorage.setItem(sfxStorageKey(), sfxEnabled ? "1" : "0");
+  } catch (_) {}
+}
+
+function updateSfxMenuLabel() {
+  const btn = byId("menuToggleSfx");
+  if (btn) {
+    btn.textContent = sfxEnabled ? "關閉答對答錯音效" : "開啟答對答錯音效（大拇指）";
+  }
+}
+
+function showAnswerFeedback(ok) {
+  if (sfxEnabled) {
+    playAudio(ok);
+    return;
+  }
+  const el = byId("feedbackFx");
+  if (!el) return;
+  el.textContent = ok ? "👍" : "👎";
+  el.className = "feedback-fx feedback-fx--" + (ok ? "ok" : "wrong");
+  if (feedbackFxTimer) clearTimeout(feedbackFxTimer);
+  feedbackFxTimer = setTimeout(() => {
+    el.classList.add("hidden");
+    feedbackFxTimer = null;
+  }, 750);
+}
+
+function unitLabel(unit) {
+  return "第 " + unit + " 關";
+}
+
+function getNextUnit() {
+  const idx = availableUnits.indexOf(String(selectedUnit));
+  if (idx < 0 || idx >= availableUnits.length - 1) return null;
+  return availableUnits[idx + 1];
+}
+
+function isLevelComplete() {
+  if (!questions.length) return false;
+  if (retryEntries.length) return false;
+  return questions.every((q) => q.mastered);
+}
+
+function rowsForSelectedUnit() {
+  if (!selectedUnit || !sheetRows.length) return sheetRows;
+  if (!sheetRows[0] || sheetRows[0].unit == null) return sheetRows;
+  return sheetRows.filter((r) => String(r.unit) === String(selectedUnit));
+}
+
+function syncAvailableUnits() {
+  if (window.TypoCorrectSheet && window.TypoCorrectSheet.listUnits) {
+    availableUnits = window.TypoCorrectSheet.listUnits(sheetRows);
+  } else {
+    availableUnits = [];
+  }
+}
+
+function loadSelectedUnit() {
+  const cfg = window.TypoCorrectConfig || {};
+  if (cfg.unit) {
+    selectedUnit = String(cfg.unit);
+    return;
+  }
+  try {
+    const v = localStorage.getItem(unitStorageKey());
+    if (v) selectedUnit = v;
+  } catch (_) {}
+}
+
+function saveSelectedUnit() {
+  try {
+    localStorage.setItem(unitStorageKey(), selectedUnit);
+  } catch (_) {}
+}
+
+function ensureSelectedUnitValid() {
+  syncAvailableUnits();
+  if (!availableUnits.length) {
+    selectedUnit = "";
+    return;
+  }
+  if (!availableUnits.includes(String(selectedUnit))) {
+    selectedUnit = availableUnits[0];
+  }
+}
+
+function updateUnitMenuLabel() {
+  const btn = byId("menuPickUnit");
+  if (!btn) return;
+  if (!availableUnits.length) {
+    btn.textContent = "選擇關卡";
+    return;
+  }
+  btn.textContent = "關卡：" + unitLabel(selectedUnit);
+}
+
+function updateStartHint() {
+  const el = byId("startHint");
+  if (!el) return;
+  let base;
+  if (isAdvancedMode()) {
+    base = "找出用錯的字並點擊，再從下方木牌選出正確的字。";
+  } else {
+    base = "依注音選出正確的字。點擊下方木牌上的答案繼續。";
+  }
+  if (availableUnits.length && selectedUnit !== "") {
+    base += "（" + unitLabel(selectedUnit) + "）";
+  }
+  el.textContent = base;
+}
+
+function renderUnitPicker() {
+  const picker = byId("unitPicker");
+  if (!picker) return;
+  picker.innerHTML = "";
+  if (!availableUnits.length) return;
+
+  availableUnits.forEach((unit) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = unitLabel(unit);
+    if (String(unit) === String(selectedUnit)) {
+      btn.classList.add("unit-picker__btn--active");
+    }
+    btn.addEventListener("click", async () => {
+      await applyUnit(unit);
+      picker.classList.add("hidden");
+    });
+    picker.appendChild(btn);
+  });
+}
+
+async function applyUnit(unit) {
+  hideLevelComplete();
+  const next = String(unit);
+  if (next === selectedUnit && questions.length && !levelCompleteActive) {
+    updateUnitMenuLabel();
+    return;
+  }
+  selectedUnit = next;
+  saveSelectedUnit();
+  updateUnitMenuLabel();
+  updateStartHint();
+  renderUnitPicker();
+
+  if (sheetRows.length) {
+    questions = await buildQuestions(rowsForSelectedUnit());
+    if (gameStarted) {
+      initSession();
+      renderGame();
+      const q = currentQuestion();
+      if (q) speakWord(q.word);
+    } else {
+      showStartScreen();
+    }
+  }
+}
+
+function toggleUnitPicker() {
+  const picker = byId("unitPicker");
+  if (!picker || !availableUnits.length) return;
+  picker.classList.toggle("hidden");
 }
 
 function loadGameMode() {
@@ -128,17 +321,8 @@ function updateModeMenuLabel() {
   if (btn) btn.textContent = isAdvancedMode() ? "切換初級版" : "切換進階版";
 }
 
-function updateStartHint() {
-  const el = byId("startHint");
-  if (!el) return;
-  if (isAdvancedMode()) {
-    el.textContent = "找出用錯的字並點擊，再從下方木牌選出正確的字。";
-  } else {
-    el.textContent = "依注音選出正確的字。點擊下方木牌上的答案繼續。";
-  }
-}
-
 async function applyGameMode(mode) {
+  hideLevelComplete();
   gameMode = mode === "advanced" ? "advanced" : "basic";
   try {
     localStorage.setItem(modeStorageKey(), gameMode);
@@ -146,7 +330,7 @@ async function applyGameMode(mode) {
   updateModeMenuLabel();
   updateStartHint();
   if (sheetRows.length) {
-    questions = await buildQuestions(sheetRows);
+    questions = await buildQuestions(rowsForSelectedUnit());
     if (gameStarted) {
       initSession();
       renderGame();
@@ -246,8 +430,8 @@ async function buildQuestions(rows) {
 }
 
 function saveKey() {
-  const cfg = window.TypoCorrectConfig || {};
-  return SAVE_KEY + "_" + (cfg.sheetId || "") + "_" + (cfg.gid || "");
+  const u = selectedUnit !== "" ? "_" + selectedUnit : "";
+  return SAVE_KEY + "_" + configScopeKey() + u;
 }
 
 function loadSave() {
@@ -272,6 +456,7 @@ function writeSave() {
         score,
         elapsedMs,
         gameMode,
+        gameUnit: selectedUnit,
         questionStates: questions.map((q) => ({
           solved: !!q.solved,
           wrongAttempts: q.wrongAttempts || 0,
@@ -282,6 +467,10 @@ function writeSave() {
       })
     );
   } catch (_) {}
+}
+
+function resetAdvancedQuestionDisplay(q) {
+  q.shownHanzi = q.chars.map((seg, i) => (i === q.wrongIdx ? q.wrongChar : seg));
 }
 
 function initQuestionStates() {
@@ -311,13 +500,25 @@ function currentQuestion() {
   return questions[playQueue[queuePos]];
 }
 
-function resetAdvancedQuestionDisplay(q) {
-  q.shownHanzi = q.chars.map((seg, i) => (i === q.wrongIdx ? q.wrongChar : seg));
-}
-
 function resetQuestionForRetry(q) {
   q.solved = false;
   q.wrongAttempts = 0;
+  q._attemptKey = "";
+  if (q.mode === "advanced") {
+    q.pickerOpen = false;
+    resetAdvancedQuestionDisplay(q);
+  }
+}
+
+/** 每次題目重新出現在佇列時，視為新的一輪作答（清除上次的 wrongAttempts） */
+function prepareQuestionForAttempt(q) {
+  if (!q || q.mastered) return;
+  const qIndex = playQueue[queuePos];
+  const attemptKey = qIndex + "@" + queuePos + "#" + playQueue.length;
+  if (q._attemptKey === attemptKey) return;
+  q._attemptKey = attemptKey;
+  q.wrongAttempts = 0;
+  q.solved = false;
   if (q.mode === "advanced") {
     q.pickerOpen = false;
     resetAdvancedQuestionDisplay(q);
@@ -325,6 +526,7 @@ function resetQuestionForRetry(q) {
 }
 
 function scheduleRetry(qIndex) {
+  if (questions[qIndex]?.mastered) return;
   const dueAt = questionsShown + RETRY_GAP + 1;
   const existing = retryEntries.find((e) => e.qIndex === qIndex);
   if (existing) {
@@ -334,12 +536,32 @@ function scheduleRetry(qIndex) {
   retryEntries.push({ qIndex, dueAt });
 }
 
+function clearRetryForQuestion(qIndex) {
+  retryEntries = retryEntries.filter((e) => e.qIndex !== qIndex);
+}
+
+function pruneRetryEntries() {
+  retryEntries = retryEntries.filter((e) => {
+    const q = questions[e.qIndex];
+    return q && !q.mastered;
+  });
+}
+
+/** 已掌握題目不再出現在後面的佇列中 */
+function removeQuestionFromQueueAhead(qIndex) {
+  for (let i = playQueue.length - 1; i > queuePos; i--) {
+    if (playQueue[i] === qIndex) playQueue.splice(i, 1);
+  }
+}
+
 function injectDueRetries() {
+  pruneRetryEntries();
   const due = retryEntries.filter((e) => e.dueAt <= questionsShown);
   if (!due.length) return;
   retryEntries = retryEntries.filter((e) => e.dueAt > questionsShown);
   for (let i = due.length - 1; i >= 0; i--) {
     const qIndex = due[i].qIndex;
+    if (questions[qIndex]?.mastered) continue;
     resetQuestionForRetry(questions[qIndex]);
     playQueue.splice(queuePos, 0, qIndex);
   }
@@ -355,19 +577,54 @@ function extendPlayQueueIfNeeded() {
     .filter((i) => !questions[i].mastered);
   if (pool.length) {
     shuffle(pool);
+    pool.forEach((i) => resetQuestionForRetry(questions[i]));
     playQueue.push(...pool);
     return;
   }
 
+  pruneRetryEntries();
+
   if (retryEntries.length) {
     const filler = questions.map((_, i) => i).filter((i) => !questions[i].mastered);
-    const src = filler.length ? filler : questions.map((_, i) => i);
-    shuffle(src);
-    playQueue.push(...src);
+    if (filler.length) {
+      shuffle(filler);
+      filler.forEach((i) => resetQuestionForRetry(questions[i]));
+      playQueue.push(...filler);
+    }
     return;
   }
 
-  initSession();
+  if (isLevelComplete()) {
+    showLevelComplete();
+    return;
+  }
+
+  const remaining = questions.map((_, i) => i).filter((i) => !questions[i].mastered);
+  if (remaining.length) {
+    shuffle(remaining);
+    remaining.forEach((i) => resetQuestionForRetry(questions[i]));
+    playQueue.push(...remaining);
+    return;
+  }
+
+  if (questions.every((q) => q.mastered)) {
+    showLevelComplete();
+  }
+}
+
+function advanceToNextPlayable() {
+  if (!playQueue.length) return;
+  let guard = playQueue.length + 4;
+  while (guard-- > 0) {
+    if (queuePos >= playQueue.length) {
+      extendPlayQueueIfNeeded();
+      if (!playQueue.length) return;
+      if (queuePos >= playQueue.length) queuePos = 0;
+    }
+    const q = currentQuestion();
+    if (q && !q.mastered) return;
+    queuePos += 1;
+  }
 }
 
 function afterAnswerAdvance() {
@@ -375,7 +632,7 @@ function afterAnswerAdvance() {
   queuePos += 1;
   injectDueRetries();
   extendPlayQueueIfNeeded();
-  if (queuePos >= playQueue.length) queuePos = 0;
+  advanceToNextPlayable();
 }
 
 function clearSave() {
@@ -442,6 +699,10 @@ function initAudio() {
 
 function speakWord(text) {
   if (!speakingEnabled) return;
+  speakPhrase(text, 0.85);
+}
+
+function speakPhrase(text, rate) {
   if (!("speechSynthesis" in window)) return;
   const t = String(text || "").trim();
   if (!t) return;
@@ -449,9 +710,88 @@ function speakWord(text) {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(t);
     u.lang = "zh-TW";
-    u.rate = 0.85;
+    u.rate = rate != null ? rate : 0.9;
     window.speechSynthesis.speak(u);
   } catch (_) {}
+}
+
+function updateLevelCompleteButtons() {
+  const advBtn = byId("levelCompleteAdvanced");
+  const nextBtn = byId("levelCompleteNext");
+  const next = getNextUnit();
+  if (advBtn) {
+    advBtn.removeAttribute("data-replay");
+    if (isAdvancedMode()) {
+      advBtn.classList.add("hidden");
+    } else {
+      advBtn.classList.remove("hidden");
+      advBtn.textContent = "挑戰進階版";
+    }
+  }
+  if (nextBtn) {
+    nextBtn.removeAttribute("data-replay");
+    if (next != null) {
+      nextBtn.classList.remove("hidden");
+      nextBtn.textContent = "進入" + unitLabel(next);
+    } else {
+      nextBtn.classList.add("hidden");
+    }
+  }
+  if (advBtn?.classList.contains("hidden") && nextBtn?.classList.contains("hidden") && nextBtn) {
+    nextBtn.classList.remove("hidden");
+    nextBtn.textContent = "再玩一次";
+    nextBtn.setAttribute("data-replay", "1");
+  }
+}
+
+function showLevelComplete() {
+  if (levelCompleteActive || !gameStarted) return;
+  if (!isLevelComplete()) return;
+  levelCompleteActive = true;
+  clearSave();
+  updateLevelCompleteButtons();
+  const overlay = byId("levelCompleteOverlay");
+  if (overlay) overlay.classList.remove("hidden");
+  speakPhrase("你做到了！");
+}
+
+function hideLevelComplete() {
+  levelCompleteActive = false;
+  byId("levelCompleteOverlay")?.classList.add("hidden");
+}
+
+async function onLevelCompleteAdvanced() {
+  hideLevelComplete();
+  clearSave();
+  if (!isAdvancedMode()) {
+    await applyGameMode("advanced");
+  } else {
+    initSession();
+    renderGame();
+    const q = currentQuestion();
+    if (q) speakWord(q.word);
+  }
+}
+
+async function onLevelCompleteNext() {
+  const nextBtn = byId("levelCompleteNext");
+  if (nextBtn?.getAttribute("data-replay") === "1") {
+    hideLevelComplete();
+    clearSave();
+    initSession();
+    renderGame();
+    const q = currentQuestion();
+    if (q) speakWord(q.word);
+    return;
+  }
+  const next = getNextUnit();
+  if (next == null) return;
+  hideLevelComplete();
+  clearSave();
+  if (isAdvancedMode()) {
+    await applyGameMode("basic");
+  }
+  await applyUnit(next);
 }
 
 function getMaxUnitsPerRow() {
@@ -562,17 +902,21 @@ function renderBoardOptions(q) {
 }
 
 function finishCorrectAnswer(q, center) {
+  const qIndex = playQueue[queuePos];
   if ((q.wrongAttempts || 0) === 0) {
     q.mastered = true;
     score += 1;
+    clearRetryForQuestion(qIndex);
+    removeQuestionFromQueueAhead(qIndex);
   } else {
-    scheduleRetry(playQueue[queuePos]);
+    scheduleRetry(qIndex);
   }
   updateHud();
   writeSave();
   setTimeout(() => {
     afterAnswerAdvance();
     renderGame();
+    if (levelCompleteActive) return;
     const next = currentQuestion();
     if (next) speakWord(next.word);
   }, 650);
@@ -588,17 +932,23 @@ function bindBoardPickHandlers(center, q) {
       const picked = btn.getAttribute("data-pick") || "";
       if (picked !== q.correctBase) {
         q.wrongAttempts = (q.wrongAttempts || 0) + 1;
-        playAudio(false);
+        showAnswerFeedback(false);
         btn.classList.add("wrong-flash");
         setTimeout(() => btn.classList.remove("wrong-flash"), 400);
         return;
       }
-      playAudio(true);
+      showAnswerFeedback(true);
       btn.classList.add("correct-flash");
-      q.solved = true;
-      if (q.mode === "advanced") {
+      const firstTry = (q.wrongAttempts || 0) === 0;
+      if (firstTry) {
+        q.solved = true;
+        if (q.mode === "advanced") {
+          q.pickerOpen = false;
+          q.shownHanzi[q.wrongIdx] = q.correctChar;
+        }
+      } else if (q.mode === "advanced") {
         q.pickerOpen = false;
-        q.shownHanzi[q.wrongIdx] = q.correctChar;
+        resetAdvancedQuestionDisplay(q);
       }
       finishCorrectAnswer(q, center);
     });
@@ -612,12 +962,11 @@ function bindAdvancedCharHandlers(center, q) {
       const idx = parseInt(btn.getAttribute("data-char-idx"), 10);
       if (idx !== q.wrongIdx) {
         q.wrongAttempts = (q.wrongAttempts || 0) + 1;
-        playAudio(false);
+        showAnswerFeedback(false);
         btn.classList.add("wrong-flash");
         setTimeout(() => btn.classList.remove("wrong-flash"), 400);
         return;
       }
-      playAudio(true);
       q.pickerOpen = true;
       renderGame();
     });
@@ -635,8 +984,26 @@ function renderGame() {
   }
 
   extendPlayQueueIfNeeded();
-  const q = currentQuestion();
+  advanceToNextPlayable();
+  let q = currentQuestion();
   if (!q) return;
+
+  let guard = playQueue.length + 4;
+  while (q.mastered && guard-- > 0) {
+    if (isLevelComplete()) {
+      showLevelComplete();
+      return;
+    }
+    advanceToNextPlayable();
+    q = currentQuestion();
+    if (!q) return;
+  }
+  if (q.mastered) {
+    if (isLevelComplete()) showLevelComplete();
+    return;
+  }
+
+  prepareQuestionForAttempt(q);
 
   const adv = q.mode === "advanced";
   const boardCls =
@@ -716,6 +1083,11 @@ function beginGame(continueSave) {
   if (continueSave) {
     const s = loadSave();
     if (s && Array.isArray(s.playQueue) && s.playQueue.length) {
+      if (s.gameUnit != null && String(s.gameUnit) !== String(selectedUnit)) {
+        initSession();
+        score = 0;
+        elapsedMs = 0;
+      } else {
       if (s.gameMode === "advanced" || s.gameMode === "basic") gameMode = s.gameMode;
       queuePos = s.queuePos || 0;
       playQueue = s.playQueue;
@@ -729,8 +1101,18 @@ function beginGame(continueSave) {
           questions[i].solved = !!st.solved;
           questions[i].wrongAttempts = st.wrongAttempts || 0;
           questions[i].mastered = !!st.mastered;
-          if (questions[i].mode === "advanced") questions[i].pickerOpen = !!st.pickerOpen;
+          if (!questions[i].mastered && questions[i].solved) {
+            questions[i].solved = false;
+            if (questions[i].mode === "advanced") {
+              questions[i].pickerOpen = false;
+              resetAdvancedQuestionDisplay(questions[i]);
+            }
+          } else if (questions[i].mode === "advanced") {
+            questions[i].pickerOpen = !!st.pickerOpen;
+            if (!questions[i].solved) resetAdvancedQuestionDisplay(questions[i]);
+          }
         });
+      }
       }
     } else if (s && typeof s.slideIndex === "number") {
       initSession();
@@ -785,7 +1167,12 @@ async function loadSheet() {
   }
   const rows = await window.TypoCorrectSheet.fetchTypoRows(cfg.sheetId, cfg.gid);
   sheetRows = rows;
-  questions = await buildQuestions(rows);
+  syncAvailableUnits();
+  ensureSelectedUnitValid();
+  saveSelectedUnit();
+  updateUnitMenuLabel();
+  renderUnitPicker();
+  questions = await buildQuestions(rowsForSelectedUnit());
   if (center) {
     center.classList.remove("game-center--busy");
     center.classList.add("hidden");
@@ -794,6 +1181,7 @@ async function loadSheet() {
 }
 
 function resetGame() {
+  hideLevelComplete();
   stopTimer();
   timerStarted = false;
   gameStarted = false;
@@ -821,6 +1209,7 @@ function toggleFullscreen() {
 function toggleMenu() {
   const menu = byId("sideMenu");
   if (menu) menu.classList.toggle("hidden");
+  byId("unitPicker")?.classList.add("hidden");
 }
 
 window.addEventListener("resize", onWordBoardResize);
@@ -839,13 +1228,33 @@ async function init() {
 
   initAudio();
   loadGameMode();
+  loadSfxSetting();
+  loadSelectedUnit();
   updateModeMenuLabel();
+  updateUnitMenuLabel();
+  updateSfxMenuLabel();
   updateStartHint();
   updateHud();
 
+  byId("menuPickUnit")?.addEventListener("click", () => {
+    toggleUnitPicker();
+  });
+  byId("levelCompleteAdvanced")?.addEventListener("click", () => {
+    onLevelCompleteAdvanced();
+  });
+  byId("levelCompleteNext")?.addEventListener("click", () => {
+    onLevelCompleteNext();
+  });
   byId("menuToggleMode")?.addEventListener("click", async () => {
     toggleMenu();
     await applyGameMode(isAdvancedMode() ? "basic" : "advanced");
+  });
+  byId("menuToggleSfx")?.addEventListener("click", () => {
+    sfxEnabled = !sfxEnabled;
+    saveSfxSetting();
+    updateSfxMenuLabel();
+    toggleMenu();
+    byId("feedbackFx")?.classList.add("hidden");
   });
   byId("startBtn")?.addEventListener("click", () => beginGame(false));
   byId("continueBtn")?.addEventListener("click", () => beginGame(true));

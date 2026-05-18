@@ -7,7 +7,7 @@
 需用本機伺服器開啟（避免字型與試算表 CORS 問題）：
 
 ```bash
-cd "/Users/jiawu/Documents/GitHub/typo correct"
+cd "/Users/jiawu/Documents/GitHub/typo-correct"
 python3 -m http.server 8080
 ```
 
@@ -60,7 +60,7 @@ assets/
 ## 上傳 GitHub
 
 ```bash
-cd "/Users/jiawu/Documents/GitHub/typo correct"
+cd "/Users/jiawu/Documents/GitHub/typo-correct"
 git init
 git add .
 git commit -m "Initial commit: 字音字形改錯叢林遊戲"
